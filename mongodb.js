@@ -27,46 +27,54 @@ async function connectToDatabase() {
             return;
         }
 
-        try {
-            await client.connect();
-            console.log('\n' + '─'.repeat(40));
-            console.log(`${colors.magenta}${colors.bright}${lang.console?.bot?.databaseConnection || '🕸️  DATABASE CONNECTION'}${colors.reset}`);
-            console.log('─'.repeat(40));
-            console.log('\x1b[36m[ DATABASE ]\x1b[0m', '\x1b[32m' + (lang.console?.mongodb?.connected || 'Connected to MongoDB ✅') + '\x1b[0m');
-        } catch (err) {
-            console.warn("\x1b[33m[ WARNING ]\x1b[0m " + (lang.console?.mongodb?.connectionFailed || "Could not connect to MongoDB. Continuing without database functionality."));
-            console.error(err.message);
-        }
-    } catch (e) {
-        if (!client) {
-            console.warn("\x1b[33m[ WARNING ]\x1b[0m Skipping MongoDB connection as URI is not provided.");
-            return;
-        }
-        try {
-            await client.connect();
-            console.log('\n' + '─'.repeat(40));
-            console.log(`${colors.magenta}${colors.bright}🕸️  DATABASE CONNECTION${colors.reset}`);
-            console.log('─'.repeat(40));
-            console.log('\x1b[36m[ DATABASE ]\x1b[0m', '\x1b[32mConnected to MongoDB ✅\x1b[0m');
-        } catch (err) {
-            console.warn("\x1b[33m[ WARNING ]\x1b[0m Could not connect to MongoDB. Continuing without database functionality.");
-            console.error(err.message);
-        }
+        await client.connect();
+        console.log('\n' + '─'.repeat(40));
+        console.log(`${colors.magenta}${colors.bright}${lang.console?.bot?.databaseConnection || '🕸️  DATABASE CONNECTION'}${colors.reset}`);
+        console.log('─'.repeat(40));
+        console.log('\x1b[36m[ DATABASE ]\x1b[0m', '\x1b[32m' + (lang.console?.mongodb?.connected || 'Connected to MongoDB ✅') + '\x1b[0m');
+    } catch (err) {
+        const { getLangSync } = require('./utils/languageLoader.js');
+        const lang = getLangSync();
+        console.warn("\x1b[33m[ WARNING ]\x1b[0m " + (lang.console?.mongodb?.connectionFailed || "Could not connect to MongoDB. Continuing without database functionality."));
+        console.error(err.message);
     }
 }
 
-const db = client ? client.db("PrimeMusicSSRR") : null;
-const playlistCollection = db ? db.collection("SongPlayLists") : null;
-const autoplayCollection = db ? db.collection("AutoplaySettings") : null;
-const languageCollection = db ? db.collection("GuildLanguages") : null;
+let collections = {
+    playlist: null,
+    autoplay: null,
+    language: null
+};
+
+async function initializeCollections() {
+    try {
+        if (!client) return;
+        
+        const db = client.db("PrimeMusicSSRR");
+        collections.playlist = db.collection("SongPlayLists");
+        collections.autoplay = db.collection("AutoplaySettings");
+        collections.language = db.collection("GuildLanguages");
+    } catch (error) {
+        console.error("Failed to initialize collections:", error.message);
+    }
+}
+
+function getPlaylistCollection() {
+    return collections.playlist;
+}
+
+function getAutoplayCollection() {
+    return collections.autoplay;
+}
 
 function getLanguageCollection() {
-    return languageCollection;
+    return collections.language;
 }
 
 module.exports = {
     connectToDatabase,
-    playlistCollection,
-    autoplayCollection,
+    initializeCollections,
+    getPlaylistCollection,
+    getAutoplayCollection,
     getLanguageCollection,
 };

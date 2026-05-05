@@ -115,8 +115,9 @@ class StatusManager {
             }
  
             if (!voiceChannel) {
+                const { ChannelType } = require('discord.js');
                 for (const channel of guild.channels.cache.values()) {
-                    if (channel.type === 2 && this.voiceChannelData.has(channel.id)) {
+                    if (channel.type === ChannelType.GuildVoice && this.voiceChannelData.has(channel.id)) {
                         voiceChannel = channel;
                         break;
                     }

@@ -6,7 +6,7 @@ const config = require("./config.js");
 const { getEmoji, getButtonEmoji } = require('./UI/emojis/emoji');
 const colors = require('./UI/colors/colors');
 const axios = require('axios');
-const { autoplayCollection, playlistCollection } = require('./mongodb.js');
+const { getAutoplayCollection, getPlaylistCollection } = require('./mongodb.js');
 const { initializeLavalinkManager, getLavalinkManager } = require('./lavalink.js');
 const { cardFromMessage, safeDeferUpdate } = require('./utils/responseHandler.js');
 
@@ -525,7 +525,12 @@ async function initializePlayer(client) {
         }
 
         try {
-            await playlistCollection.updateOne(
+            const collection = getPlaylistCollection();
+            if (!collection) {
+                console.warn(`[ PLAYER ] MongoDB playlist collection not available for guild ${guildId}`);
+                return;
+            }
+            await collection.updateOne(
                 { guildId, name: '__HISTORY__' },
                 { 
                     $push: { 
@@ -664,7 +669,8 @@ async function initializePlayer(client) {
         clearProgressUpdates(guildId);
         const channel = client.channels.cache.get(player.textChannel);
         if (channel) {
-            const settings = await autoplayCollection.findOne({ guildId }).catch(() => null);
+            const collection = getAutoplayCollection();
+            const settings = collection ? await collection.findOne({ guildId }).catch(() => null) : null;
             const hasNextTrack = player.queue.length > 0 || player.loop === "queue" || player.loop === "track" || settings?.autoplay;
             
             if (!hasNextTrack) {
@@ -693,7 +699,8 @@ async function initializePlayer(client) {
         clearTrackMediaCache(guildId);
     
         try {
-            const settings = await autoplayCollection.findOne({ guildId });
+            const collection = getAutoplayCollection();
+            const settings = collection ? await collection.findOne({ guildId }) : null;
             const is24_7 = settings?.twentyfourseven;
     
             if (settings?.autoplay) {
@@ -729,7 +736,8 @@ async function initializePlayer(client) {
             const langSync = getLangSync();
             console.error(langSync.console?.player?.errorQueueEnd || "Error handling queue end:", error);
             await cleanupTrackMessages(client, player);
-            const settings = await autoplayCollection.findOne({ guildId });
+            const collection = getAutoplayCollection();
+            const settings = collection ? await collection.findOne({ guildId }) : null;
             const lang = await getLang(guildId).catch(() => ({ console: { player: {} } }));
             const t = lang.console?.player || {};
             if (!settings?.twentyfourseven) {
@@ -1004,26 +1012,32 @@ async function handleInteraction(client, i, player, channel) {
                     return;
                 }
 
+                const collection = getPlaylistCollection();
+                if (!collection) {
+                    await sendEmbed(channel, '❌ **Database connection unavailable.**');
+                    return;
+                }
+
                 const userId = i.user.id;
                 const serverId = channel.guild.id;
                 const serverName = channel.guild.name;
                 const playlistName = PLAYER_FAVORITES_NAME;
                 const legacyPlaylistName = `${LEGACY_PLAYER_FAVORITES_NAME}_${userId}`;
-                let existing = await playlistCollection.findOne({ name: playlistName, userId, serverId });
+                let existing = await collection.findOne({ name: playlistName, userId, serverId });
 
                 if (!existing) {
-                    const legacy = await playlistCollection.findOne({ name: legacyPlaylistName, userId, serverId });
+                    const legacy = await collection.findOne({ name: legacyPlaylistName, userId, serverId });
                     if (legacy) {
-                        await playlistCollection.updateOne(
+                        await collection.updateOne(
                             { _id: legacy._id },
                             { $set: { name: playlistName, isPrivate: true } }
                         );
-                        existing = await playlistCollection.findOne({ _id: legacy._id });
+                        existing = await collection.findOne({ _id: legacy._id });
                     }
                 }
 
                 if (!existing) {
-                    await playlistCollection.insertOne({
+                    await collection.insertOne({
                         name: playlistName,
                         songs: [],
                         isPrivate: true,
@@ -1034,7 +1048,7 @@ async function handleInteraction(client, i, player, channel) {
                 }
 
                 const songEntry = { url: current.uri };
-                await playlistCollection.updateOne(
+                await collection.updateOne(
                     { name: playlistName, userId, serverId },
                     { $addToSet: { songs: songEntry } }
                 );
@@ -1177,9 +1191,15 @@ async function handlePlayerModalSubmit(client, modal, player, channel) {
             const serverId = channel.guild.id;
             const serverName = channel.guild.name;
 
-            const existing = await playlistCollection.findOne({ name: playlistName, userId, serverId });
+            const collection = getPlaylistCollection();
+            if (!collection) {
+                await modal.editReply({ content: '❌ **Database connection unavailable.**' }).catch(() => {});
+                return;
+            }
+
+            const existing = await collection.findOne({ name: playlistName, userId, serverId });
             if (!existing) {
-                await playlistCollection.insertOne({
+                await collection.insertOne({
                     name: playlistName,
                     songs: [],
                     isPrivate: false,
@@ -1189,7 +1209,7 @@ async function handlePlayerModalSubmit(client, modal, player, channel) {
                 });
             }
 
-            await playlistCollection.updateOne(
+            await collection.updateOne(
                 { name: playlistName, userId, serverId },
                 { $addToSet: { songs: { url: current.uri } } }
             );

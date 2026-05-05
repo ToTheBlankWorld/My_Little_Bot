@@ -3,7 +3,7 @@ const config = require("./config.js");
 const fs = require("fs");
 const path = require('path');
 const { initializePlayer } = require('./player');
-const { connectToDatabase } = require('./mongodb');
+const { connectToDatabase, initializeCollections } = require('./mongodb');
 const colors = require('./UI/colors/colors');
 const { getLavalinkManager } = require('./lavalink.js');
 const { getLang, getLangSync } = require('./utils/languageLoader.js');
@@ -69,7 +69,7 @@ initializePlayer(client).catch(error => {
     console.error(`${colors.cyan}[ LAVALINK ]${colors.reset} ${colors.red}${lang.console?.bot?.lavalinkError?.replace('{message}', error.message) || `Error initializing player: ${error.message}`}${colors.reset}`);
 });
 
-client.on("clientReady", () => {
+client.on("ready", () => {
     const lang = getLangSync();
     console.log(`${colors.cyan}[ SYSTEM ]${colors.reset} ${colors.green}${lang.console?.bot?.clientLogged?.replace('{tag}', client.user.tag) || `Client logged as ${client.user.tag}`}${colors.reset}`);
     console.log(`${colors.cyan}[ MUSIC ]${colors.reset} ${colors.green}${lang.console?.bot?.musicSystemReady || 'Riffy Music System Ready 🎵'}${colors.reset}`);
@@ -100,15 +100,22 @@ client.on("clientReady", () => {
     client.riffy.init(client.user.id);
     }
 });
-client.config = config;
 
-fs.readdir("./events", (_err, files) => {
+fs.readdir("./events", (err, files) => {
+  if (err) {
+    console.error(`${colors.cyan}[ EVENTS ]${colors.reset} ${colors.red}Failed to read events directory: ${err.message}${colors.reset}`);
+    return;
+  }
   files.forEach((file) => {
     if (!file.endsWith(".js")) return;
-    const event = require(`./events/${file}`);
-    let eventName = file.split(".")[0]; 
-    client.on(eventName, event.bind(null, client));
-    delete require.cache[require.resolve(`./events/${file}`)];
+    try {
+      const event = require(`./events/${file}`);
+      let eventName = file.split(".")[0]; 
+      client.on(eventName, event.bind(null, client));
+      delete require.cache[require.resolve(`./events/${file}`)];
+    } catch (error) {
+      console.error(`${colors.cyan}[ EVENTS ]${colors.reset} ${colors.red}Failed to load event ${file}: ${error.message}${colors.reset}`);
+    }
   });
 });
 
@@ -183,8 +190,26 @@ client.login(config.TOKEN || process.env.TOKEN).catch((e) => {
   console.log(`${colors.cyan}[ TOKEN ]${colors.reset} ${colors.red}${lang.console?.bot?.tokenAuthFailed || 'Authentication Failed ❌'}${colors.reset}`);
   console.log(`${colors.gray}${lang.console?.bot?.tokenError || 'Error: Turn On Intents or Reset New Token'}${colors.reset}`);
 });
-connectToDatabase().then(() => {
+
+// Graceful shutdown handler
+process.on('SIGINT', async () => {
   const lang = getLangSync();
+  console.log(`\n${colors.cyan}[ SHUTDOWN ]${colors.reset} ${colors.yellow}${lang.console?.bot?.shutdownInitiated || 'Shutting down gracefully...'}${colors.reset}`);
+  
+  try {
+    if (client && client.user) {
+      await client.destroy();
+      console.log(`${colors.cyan}[ SHUTDOWN ]${colors.reset} ${colors.green}${lang.console?.bot?.botClosed || 'Bot closed'}${colors.reset}`);
+    }
+  } catch (e) {
+    console.error('Error closing bot:', e);
+  }
+  
+  process.exit(0);
+});
+connectToDatabase().then(async () => {
+  const lang = getLangSync();
+  await initializeCollections();
   console.log(`${colors.cyan}[ DATABASE ]${colors.reset} ${colors.green}${lang.console?.bot?.databaseOnline || 'MongoDB Online ✅'}${colors.reset}`);
 }).catch((err) => {
   const lang = getLangSync();

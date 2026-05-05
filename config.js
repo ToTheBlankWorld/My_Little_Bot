@@ -25,11 +25,11 @@ module.exports = {
   errorLog: "", 
   nodes: [
       {
-      name: "GlaceYT",
-      password: "glace",
-      host: "de-01.strixnodes.com",
-      port: 2010,
-      secure: false
-    }
+  name: "MyOracleCloud2",
+  password: "glace",
+  host: "129.150.56.21",
+  port: 25582,
+  secure: false
+}
   ]
 }

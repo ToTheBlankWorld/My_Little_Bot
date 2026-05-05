@@ -529,6 +529,21 @@ class LavalinkNodeManager {
         }, 5000);
     }
 
+    stopMonitoring() {
+        if (this.healthCheckInterval) {
+            clearInterval(this.healthCheckInterval);
+            this.healthCheckInterval = null;
+        }
+        if (this.reconnectInterval) {
+            clearInterval(this.reconnectInterval);
+            this.reconnectInterval = null;
+        }
+        if (this.connectLoopInterval) {
+            clearInterval(this.connectLoopInterval);
+            this.connectLoopInterval = null;
+        }
+    }
+
     getNodeStatus() {
         const status = {
             total: this.nodes.size,
